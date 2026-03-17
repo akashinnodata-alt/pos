@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hirandi Fashion - Invoice Generator</title>
-    <!-- jsPDF Library for PDF Generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -885,8 +886,8 @@
             }
         }
 
-        // Download Invoice as PDF using html2pdf
-        function downloadInvoicePDF() {
+        // Download Invoice as PDF using html2canvas + jsPDF
+        async function downloadInvoicePDF() {
             const invoiceNumber = document.getElementById('invoiceNumber').value;
             const customerName = document.getElementById('customerName').value;
 
@@ -898,20 +899,58 @@
             // Show loading spinner
             document.getElementById('loadingSpinner').style.display = 'block';
 
-            // Get the invoice preview element
-            const invoiceElement = document.getElementById('invoicePreview');
+            try {
+                // Get the invoice preview element
+                const invoiceElement = document.getElementById('invoicePreview');
+                
+                // Clone the element to avoid affecting the original
+                const clonedElement = invoiceElement.cloneNode(true);
+                clonedElement.style.backgroundColor = 'white';
+                clonedElement.style.padding = '20px';
+                
+                // Create a temporary container
+                const tempContainer = document.createElement('div');
+                tempContainer.style.position = 'absolute';
+                tempContainer.style.left = '-9999px';
+                tempContainer.style.top = '-9999px';
+                tempContainer.style.width = '800px';
+                tempContainer.appendChild(clonedElement);
+                document.body.appendChild(tempContainer);
 
-            // html2pdf options
-            const options = {
-                margin: 10,
-                filename: `Invoice_${invoiceNumber}_${customerName}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
-                jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
-            };
+                // Wait a moment for rendering
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Generate PDF
-            html2pdf().set(options).from(invoiceElement).save().then(() => {
+                // Capture the element as a canvas
+                const canvas = await html2canvas(clonedElement, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true
+                });
+
+                // Remove temporary container
+                document.body.removeChild(tempContainer);
+
+                // Calculate dimensions for PDF
+                const imgWidth = 210; // A4 width in mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                // Create PDF using jsPDF
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                // Add image to PDF
+                const imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+                // Save PDF
+                pdf.save(`Invoice_${invoiceNumber}_${customerName}.pdf`);
+
                 // Hide loading spinner
                 document.getElementById('loadingSpinner').style.display = 'none';
 
@@ -934,11 +973,12 @@
                 saveInvoiceToHistory(invoice);
 
                 showMessage('messageCreate', '✅ Invoice PDF downloaded! Open WhatsApp to share.', 'success');
-            }).catch(err => {
+
+            } catch (err) {
                 document.getElementById('loadingSpinner').style.display = 'none';
-                showMessage('messageCreate', '❌ Error generating PDF. Please try again.', 'error');
-                console.error(err);
-            });
+                showMessage('messageCreate', '❌ Error generating PDF. Please check your browser console.', 'error');
+                console.error('PDF Generation Error:', err);
+            }
         }
 
         // Save invoice to history
