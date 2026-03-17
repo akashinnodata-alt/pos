@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hirandi Fashion - Invoice Generator</title>
+    <!-- jsPDF Library for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -497,29 +499,25 @@
             border: 1px solid #f5c6cb;
         }
 
-        .print-only {
+        .loading-spinner {
             display: none;
+            text-align: center;
+            padding: 20px;
         }
 
-        @media print {
-            body {
-                background: white;
-                padding: 0;
-            }
-            .container {
-                box-shadow: none;
-                border-radius: 0;
-            }
-            .header, .tabs, .tab-content, .button-group, .preview-section {
-                display: none !important;
-            }
-            .print-only {
-                display: block;
-            }
-            .invoice-preview {
-                box-shadow: none;
-                padding: 0;
-            }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -670,8 +668,13 @@
                 </div>
             </div>
 
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner"></div>
+                <p>Generating PDF...</p>
+            </div>
+
             <div class="button-group">
-                <button class="btn btn-primary" onclick="printInvoice()">📥 Download/Print</button>
+                <button class="btn btn-primary" onclick="downloadInvoicePDF()">📥 Download PDF</button>
                 <button class="btn btn-secondary" onclick="clearForm()">🔄 Clear Form</button>
             </div>
         </div>
@@ -882,8 +885,8 @@
             }
         }
 
-        // Download Invoice as PDF
-        function printInvoice() {
+        // Download Invoice as PDF using html2pdf
+        function downloadInvoicePDF() {
             const invoiceNumber = document.getElementById('invoiceNumber').value;
             const customerName = document.getElementById('customerName').value;
 
@@ -892,169 +895,50 @@
                 return;
             }
 
-            // Save to history first
-            const subtotal = parseFloat(document.getElementById('previewSubtotal').textContent);
-            const advanceAmount = parseFloat(document.getElementById('previewAdvance').textContent) || 0;
-            const balance = parseFloat(document.getElementById('previewBalance').textContent);
+            // Show loading spinner
+            document.getElementById('loadingSpinner').style.display = 'block';
 
-            const invoice = {
-                number: invoiceNumber,
-                customer: customerName,
-                date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-                time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-                subtotal: subtotal,
-                advance: advanceAmount,
-                balance: balance,
-                timestamp: new Date().getTime()
+            // Get the invoice preview element
+            const invoiceElement = document.getElementById('invoicePreview');
+
+            // html2pdf options
+            const options = {
+                margin: 10,
+                filename: `Invoice_${invoiceNumber}_${customerName}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
             };
 
-            saveInvoiceToHistory(invoice);
+            // Generate PDF
+            html2pdf().set(options).from(invoiceElement).save().then(() => {
+                // Hide loading spinner
+                document.getElementById('loadingSpinner').style.display = 'none';
 
-            // Create PDF as HTML and download
-            downloadInvoicePDF(invoiceNumber, customerName);
+                // Save to history
+                const subtotal = parseFloat(document.getElementById('previewSubtotal').textContent);
+                const advanceAmount = parseFloat(document.getElementById('previewAdvance').textContent) || 0;
+                const balance = parseFloat(document.getElementById('previewBalance').textContent);
 
-            showMessage('messageCreate', '✅ Invoice downloaded as PDF!', 'success');
-        }
+                const invoice = {
+                    number: invoiceNumber,
+                    customer: customerName,
+                    date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }),
+                    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    subtotal: subtotal,
+                    advance: advanceAmount,
+                    balance: balance,
+                    timestamp: new Date().getTime()
+                };
 
-        // Download Invoice as PDF (simple HTML to PDF)
-        function downloadInvoicePDF(invoiceNumber, customerName) {
-            const invoiceHTML = document.getElementById('invoicePreview').innerHTML;
-            
-            // Create HTML document for PDF
-            const htmlContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Invoice ${invoiceNumber}</title>
-                <style>
-                    * { margin: 0; padding: 0; }
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    .invoice-preview { max-width: 900px; margin: 0 auto; }
-                    .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #667eea; padding-bottom: 20px; margin-bottom: 30px; }
-                    .business-info { display: flex; gap: 15px; }
-                    .logo-preview { width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px; }
-                    .business-info h2 { font-size: 20px; color: #2c3e50; margin-bottom: 5px; }
-                    .business-info p { color: #666; font-size: 11px; margin: 3px 0; }
-                    .invoice-details { text-align: right; }
-                    .invoice-details h3 { color: #667eea; font-size: 16px; margin-bottom: 10px; }
-                    .detail-row { display: flex; justify-content: space-between; font-size: 11px; margin: 5px 0; }
-                    .bill-to { margin: 20px 0; }
-                    .bill-to-label { font-weight: bold; color: #667eea; margin-bottom: 5px; }
-                    .bill-to-name { font-size: 14px; font-weight: bold; color: #2c3e50; }
-                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                    th { background: #667eea; color: white; padding: 10px; text-align: left; font-size: 12px; }
-                    td { padding: 10px; border-bottom: 1px solid #e0e0e0; font-size: 12px; }
-                    tr:nth-child(even) { background: #f8f9fa; }
-                    .totals { margin: 20px 0; display: flex; flex-direction: column; align-items: flex-end; }
-                    .total-row { display: flex; gap: 40px; font-size: 12px; margin: 5px 0; }
-                    .total-row.balance { font-weight: bold; font-size: 14px; color: #27ae60; border-top: 2px solid #667eea; padding-top: 10px; }
-                    .non-refundable { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; color: #856404; font-weight: bold; font-size: 11px; }
-                    .footer-text { text-align: center; color: #666; margin: 20px 0; font-size: 11px; font-style: italic; }
-                </style>
-            </head>
-            <body>
-                <div class="invoice-preview">
-                    ${invoiceHTML}
-                </div>
-            </body>
-            </html>
-            `;
+                saveInvoiceToHistory(invoice);
 
-            // Create blob and download
-            const blob = new Blob([htmlContent], { type: 'text/html' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Invoice_${invoiceNumber}_${customerName}.html`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Also create a text version for better compatibility
-            setTimeout(() => {
-                createAndDownloadSimplePDF(invoiceNumber, customerName);
-            }, 500);
-        }
-
-        // Create simple text-based PDF fallback
-        function createAndDownloadSimplePDF(invoiceNumber, customerName) {
-            const settings = JSON.parse(localStorage.getItem('hirandi_settings')) || {};
-            const subtotal = parseFloat(document.getElementById('previewSubtotal').textContent);
-            const advanceAmount = parseFloat(document.getElementById('previewAdvance').textContent) || 0;
-            const balance = parseFloat(document.getElementById('previewBalance').textContent);
-            
-            // Create CSV as fallback (can be opened in Excel and printed as PDF)
-            let content = `
-================================================================================
-                           HIRANDI FASHION - TAX INVOICE
-================================================================================
-
-BUSINESS INFORMATION:
-${settings.phone || 'Phone: Not provided'}
-${settings.address || 'Address: Not provided'}
-
---------------------------------------------------------------------------------
-INVOICE DETAILS:
-
-Invoice Number: ${invoiceNumber}
-Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-Time: ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-
-BILL TO:
-${document.getElementById('customerName').value}
-${document.getElementById('customerPhone').value || ''}
-
---------------------------------------------------------------------------------
-ITEMS & SERVICES:
-
-`;
-
-            const rows = document.querySelectorAll('#itemsTableBody tr');
-            rows.forEach(row => {
-                const description = row.querySelector('.item-description').value || '';
-                const quantity = row.querySelector('.item-quantity').value || '0';
-                const price = row.querySelector('.item-price').value || '0';
-                const amount = (parseFloat(quantity) * parseFloat(price)).toFixed(2);
-                
-                if (description) {
-                    content += `${description.padEnd(40)} ${quantity.padStart(3)} x Rs. ${parseFloat(price).toFixed(2).padStart(10)} = Rs. ${amount.padStart(10)}\n`;
-                }
+                showMessage('messageCreate', '✅ Invoice PDF downloaded! Open WhatsApp to share.', 'success');
+            }).catch(err => {
+                document.getElementById('loadingSpinner').style.display = 'none';
+                showMessage('messageCreate', '❌ Error generating PDF. Please try again.', 'error');
+                console.error(err);
             });
-
-            content += `
---------------------------------------------------------------------------------
-
-SUBTOTAL:                                          Rs. ${subtotal.toFixed(2).padStart(10)}
-`;
-
-            if (advanceAmount > 0) {
-                content += `ADVANCE PAID:                                       Rs. ${advanceAmount.toFixed(2).padStart(10)}
-`;
-            }
-
-            content += `BALANCE DUE:                                        Rs. ${balance.toFixed(2).padStart(10)}
-`;
-
-            if (advanceAmount > 0) {
-                content += `
-⚠️  THIS ADVANCE PAYMENT IS NON-REFUNDABLE
-`;
-            }
-
-            content += `
-================================================================================
-Thank you for doing business with us!
-================================================================================
-            `;
-
-            // Create text file
-            const blob = new Blob([content], { type: 'text/plain' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Invoice_${invoiceNumber}_${customerName}.txt`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
         }
 
         // Save invoice to history
@@ -1125,7 +1009,7 @@ Thank you for doing business with us!
             const activeTab = document.querySelector('.tab-button.active');
             document.querySelector('.tab-button:first-child').click();
 
-            showMessage('messageCreate', '✅ Invoice loaded. You can modify and print again.', 'success');
+            showMessage('messageCreate', '✅ Invoice loaded. You can modify and download again.', 'success');
         }
 
         // Delete invoice
