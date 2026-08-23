@@ -468,17 +468,8 @@
         .logo-preview {
             width: 80px;
             height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 14px;
-            text-align: center;
-            padding: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            object-fit: contain;
+            flex-shrink: 0;
         }
 
         .message {
@@ -602,7 +593,7 @@
                     <div class="invoice-header">
                         <div class="business-info">
                             <div style="display: flex; gap: 15px; align-items: center;">
-                                <div class="logo-preview">HF</div>
+                                <img src="logo.png" alt="Hirandi Fashion" class="logo-preview">
                                 <div>
                                     <h2>Hirandi Fashion</h2>
                                     <p id="previewPhone"></p>
