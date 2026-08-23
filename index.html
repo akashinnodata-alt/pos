@@ -91,6 +91,7 @@
         input[type="text"],
         input[type="number"],
         input[type="tel"],
+        input[type="datetime-local"],
         textarea {
             width: 100%;
             padding: 12px;
@@ -104,6 +105,7 @@
         input[type="text"]:focus,
         input[type="number"]:focus,
         input[type="tel"]:focus,
+        input[type="datetime-local"]:focus,
         textarea:focus {
             outline: none;
             border-color: #667eea;
@@ -545,9 +547,14 @@
                     <input type="text" id="invoiceNumber" placeholder="e.g., 001, 002, 003" required>
                 </div>
                 <div class="form-group">
-                    <label>Date & Time</label>
+                    <label>Billing Date</label>
                     <input type="text" id="invoiceDateTime" readonly>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label>Delivery Date</label>
+                <input type="datetime-local" id="deliveryDateTime" onchange="updatePreview()">
             </div>
 
             <div class="two-column">
@@ -617,12 +624,16 @@
                                 <span id="previewInvoiceNumber" style="color: #e74c3c; font-weight: 700;">-</span>
                             </div>
                             <div class="detail-row">
-                                <strong>Date:</strong>
+                                <strong>Billing Date:</strong>
                                 <span id="previewDate">-</span>
                             </div>
                             <div class="detail-row">
                                 <strong>Time:</strong>
                                 <span id="previewTime">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <strong>Delivery Date:</strong>
+                                <span id="previewDeliveryDate">-</span>
                             </div>
                         </div>
                     </div>
@@ -768,6 +779,15 @@
             document.getElementById('previewTime').textContent = time;
         }
 
+        // Format the manually-entered delivery date/time for display
+        function formatDeliveryDate(value) {
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return '-';
+            const date = d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            return `${date} ${time}`;
+        }
+
         // Load settings from localStorage
         function loadSettings() {
             const settings = JSON.parse(localStorage.getItem('hirandi_settings')) || {};
@@ -852,6 +872,10 @@
             const invoiceNumber = document.getElementById('invoiceNumber').value || '-';
             document.getElementById('previewInvoiceNumber').textContent = invoiceNumber;
 
+            // Get delivery date
+            const deliveryDateTime = document.getElementById('deliveryDateTime').value;
+            document.getElementById('previewDeliveryDate').textContent = deliveryDateTime ? formatDeliveryDate(deliveryDateTime) : '-';
+
             // Build items table
             const itemsBody = document.getElementById('previewItemsBody');
             itemsBody.innerHTML = '';
@@ -906,7 +930,7 @@
             const customerName = document.getElementById('customerName').value;
 
             if (!invoiceNumber || !customerName) {
-                showMessage('messageCreate', '❌ Please fill in Invoice Number and Customer Name', 'error');
+                showMessage('messageCreate', '❌ Please fill in Customer Number and Customer Name', 'error');
                 return;
             }
 
@@ -978,6 +1002,7 @@
                     customer: customerName,
                     date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }),
                     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    deliveryDate: document.getElementById('deliveryDateTime').value || '',
                     subtotal: subtotal,
                     advance: advanceAmount,
                     balance: balance,
@@ -1041,6 +1066,7 @@
                         <div class="history-item-customer">Customer: ${invoice.customer}</div>
                         <div class="history-item-amount">Balance: Rs. ${invoice.balance.toFixed(2)}</div>
                         <div class="history-item-date">${invoice.date} at ${invoice.time}</div>
+                        ${invoice.deliveryDate ? `<div class="history-item-date">Delivery: ${formatDeliveryDate(invoice.deliveryDate)}</div>` : ''}
                     </div>
                     <div class="history-buttons">
                         <button class="btn btn-primary btn-small" onclick="loadInvoiceFromHistory(${idx})">Load</button>
@@ -1059,6 +1085,7 @@
 
             document.getElementById('invoiceNumber').value = invoice.number;
             document.getElementById('customerName').value = invoice.customer;
+            document.getElementById('deliveryDateTime').value = invoice.deliveryDate || '';
 
             const activeTab = document.querySelector('.tab-button.active');
             document.querySelector('.tab-button:first-child').click();
@@ -1084,6 +1111,7 @@
             document.getElementById('invoiceNumber').value = '';
             document.getElementById('customerName').value = '';
             document.getElementById('customerPhone').value = '';
+            document.getElementById('deliveryDateTime').value = '';
             document.getElementById('advanceCheckbox').checked = false;
             document.getElementById('advanceAmount').value = '';
             document.getElementById('advanceField').style.display = 'none';
@@ -1104,21 +1132,22 @@
             }
 
             // CSV header
-            let csvContent = 'Invoice Number,Customer Name,Date,Time,Item Description,Item Quantity,Item Price,Item Amount,Subtotal,Advance Paid,Balance Due\n';
+            let csvContent = 'Invoice Number,Customer Name,Date,Time,Delivery Date,Item Description,Item Quantity,Item Price,Item Amount,Subtotal,Advance Paid,Balance Due\n';
 
             // Process each invoice
             history.forEach(invoice => {
                 const items = invoice.items || [];
+                const deliveryDate = invoice.deliveryDate || '';
                 
                 if (items.length === 0) {
-                    csvContent += `"${invoice.number}","${invoice.customer}","${invoice.date}","${invoice.time}","","","","${invoice.subtotal.toFixed(2)}","${invoice.advance.toFixed(2)}","${invoice.balance.toFixed(2)}"\n`;
+                    csvContent += `"${invoice.number}","${invoice.customer}","${invoice.date}","${invoice.time}","${deliveryDate}","","","","${invoice.subtotal.toFixed(2)}","${invoice.advance.toFixed(2)}","${invoice.balance.toFixed(2)}"\n`;
                 } else {
                     items.forEach((item, idx) => {
                         const itemAmount = (item.quantity * item.price).toFixed(2);
                         if (idx === 0) {
-                            csvContent += `"${invoice.number}","${invoice.customer}","${invoice.date}","${invoice.time}","${item.description}","${item.quantity}","${item.price.toFixed(2)}","${itemAmount}","${invoice.subtotal.toFixed(2)}","${invoice.advance.toFixed(2)}","${invoice.balance.toFixed(2)}"\n`;
+                            csvContent += `"${invoice.number}","${invoice.customer}","${invoice.date}","${invoice.time}","${deliveryDate}","${item.description}","${item.quantity}","${item.price.toFixed(2)}","${itemAmount}","${invoice.subtotal.toFixed(2)}","${invoice.advance.toFixed(2)}","${invoice.balance.toFixed(2)}"\n`;
                         } else {
-                            csvContent += `"","","","","${item.description}","${item.quantity}","${item.price.toFixed(2)}","${itemAmount}","","",""\n`;
+                            csvContent += `"","","","","","${item.description}","${item.quantity}","${item.price.toFixed(2)}","${itemAmount}","","",""\n`;
                         }
                     });
                 }
@@ -1164,18 +1193,19 @@
                         const line = lines[i];
                         const cells = parseCSVLine(line);
 
-                        if (cells.length < 11) continue;
+                        if (cells.length < 12) continue;
 
                         const invoiceNumber = cells[0].trim();
                         const customerName = cells[1].trim();
                         const date = cells[2].trim();
                         const time = cells[3].trim();
-                        const itemDescription = cells[4].trim();
-                        const itemQuantity = parseFloat(cells[5]) || 0;
-                        const itemPrice = parseFloat(cells[6]) || 0;
-                        const subtotal = parseFloat(cells[8]) || 0;
-                        const advance = parseFloat(cells[9]) || 0;
-                        const balance = parseFloat(cells[10]) || 0;
+                        const deliveryDate = cells[4].trim();
+                        const itemDescription = cells[5].trim();
+                        const itemQuantity = parseFloat(cells[6]) || 0;
+                        const itemPrice = parseFloat(cells[7]) || 0;
+                        const subtotal = parseFloat(cells[9]) || 0;
+                        const advance = parseFloat(cells[10]) || 0;
+                        const balance = parseFloat(cells[11]) || 0;
 
                         // Group items by invoice number
                         if (!invoices[invoiceNumber]) {
@@ -1184,6 +1214,7 @@
                                 customer: customerName,
                                 date: date,
                                 time: time,
+                                deliveryDate: deliveryDate,
                                 subtotal: subtotal,
                                 advance: advance,
                                 balance: balance,
